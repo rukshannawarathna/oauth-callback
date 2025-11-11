@@ -101,37 +101,4 @@
     </script>
 </body>
 </html>
-```
 
-4. Scroll down and click **"Commit changes"**
-5. Click **"Commit changes"** again in the dialog
-
-### Step 3: Enable GitHub Pages
-
-1. In your repository, click **"Settings"** (top menu)
-2. Scroll down and click **"Pages"** in the left sidebar
-3. Under **"Source"**, select **"Deploy from a branch"**
-4. Under **"Branch"**, select **"main"** and **"/ (root)"**
-5. Click **"Save"**
-
-### Step 4: Get Your GitHub Pages URL
-
-After a few minutes, your page will be live at:
-```
-https://YOUR-GITHUB-USERNAME.github.io/oauth-callback/
-```
-
-For example, if your username is `johnsmith` and repo is `oauth-callback`:
-```
-https://johnsmith.github.io/oauth-callback/
-```
-
-You can check the deployment status at the top of the Pages settings - it will show a green checkmark when ready.
-
-### Step 5: Configure Harvest OAuth App
-
-1. Go to https://id.getharvest.com/developers
-2. Click on your OAuth2 application (or create a new one)
-3. In the **"Redirect URI"** field, enter:
-```
-https://YOUR-GITHUB-USERNAME.github.io/oauth-callback/
