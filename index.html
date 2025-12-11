@@ -5,23 +5,73 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>OAuth Callback</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: linear-gradient(180deg,#3b3a8a,#2a1f5a); color: #fff; display:flex; align-items:center; justify-content:center; height:100vh; margin:0 }
-    .card{ background: rgba(255,255,255,0.06); padding:20px; border-radius:12px; max-width:720px; width:92%; box-shadow:0 8px 30px rgba(0,0,0,0.25); }
-    h1{ margin:0 0 12px 0; font-size:20px }
-    p{ margin:0 0 8px 0; color:rgba(255,255,255,0.9) }
-    code{ display:block; word-break:break-all; background:rgba(0,0,0,0.18); padding:8px; border-radius:8px; margin-top:8px }
-    a.button{ display:inline-block; margin-top:12px; padding:8px 12px; background:#fff;color:#111;border-radius:8px; text-decoration:none }
+    :root {
+      --bg1: #3b3a8a;
+      --bg2: #2a1f5a;
+      --card-bg: rgba(255,255,255,0.06);
+      --text: #ffffff;
+      --muted: rgba(255,255,255,0.85);
+      --button-bg: #ffffff;
+      --button-text: #111;
+      --max-width: 720px;
+    }
+    html,body { height:100%; margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing:antialiased; }
+    body {
+      background: linear-gradient(180deg,var(--bg1),var(--bg2));
+      color: var(--text);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      box-sizing:border-box;
+      min-height:100vh;
+    }
+    .card{
+      background: var(--card-bg);
+      padding:22px;
+      border-radius:14px;
+      max-width:var(--max-width);
+      width:100%;
+      box-shadow:0 12px 36px rgba(0,0,0,0.28);
+      box-sizing:border-box;
+      text-align:left;
+    }
+    .card h1{ margin:0 0 8px 0; font-size:20px; line-height:1.1; }
+    .card p { margin:0 0 12px 0; color:var(--muted); font-size:15px; }
+    .button {
+      display:inline-block;
+      margin:0 auto;
+      padding:12px 18px;
+      background:var(--button-bg);
+      color:var(--button-text);
+      border-radius:10px;
+      text-decoration:none;
+      font-weight:600;
+      border:0;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+      cursor:pointer;
+    }
+    .actions {
+      display:flex;
+      justify-content:center;
+      margin-top:16px;
+    }
+    /* small screens: card should breathe better */
+    @media (max-width:420px) {
+      .card{ padding:18px; border-radius:12px; }
+      .card h1{ font-size:18px; }
+      .card p{ font-size:14px; }
+    }
   </style>
 </head>
 <body>
   <div class="card" id="card">
     <h1>Signing you in…</h1>
     <p id="message">Processing OAuth response and attempting to open the app.</p>
-    <!-- Hidden debug area shown only if auto-open fails or debug=1 in query -->
-    <div id="debug" style="display:none">
-      <p>Authorization Data (hidden by default):</p>
-      <code id="authdata">-</code>
-      <a id="manual" class="button" href="#">Open app manually</a>
+
+    <!-- Manual open button (hidden until needed) -->
+    <div class="actions">
+      <a id="manual" class="button" href="#" style="display:none">Open app manually</a>
     </div>
   </div>
 
@@ -30,7 +80,6 @@
       // Read query parameters and fragment
       function parseFragmentHash(hash) {
         if (!hash) return {};
-        // remove leading '#'
         var h = hash[0] === '#' ? hash.substring(1) : hash;
         try {
           return Object.fromEntries(new URLSearchParams(h));
@@ -47,56 +96,41 @@
       var accessToken = frag['access_token'] || params['access_token'] || null;
       var error = params['error'] || frag['error'] || null;
 
-      var debugEl = document.getElementById('debug');
-      var authdata = document.getElementById('authdata');
       var manual = document.getElementById('manual');
       var message = document.getElementById('message');
 
       function redirectToApp(url) {
-        // Try to open the app custom scheme. Use replace so history is not polluted.
         window.location.replace(url);
       }
 
       var autoOpened = false;
-      var debugMode = (new URLSearchParams(window.location.search)).get('debug') === '1';
 
-      function showFallback(appUrl, debugText) {
+      function showFallback(appUrl) {
         // Show manual button when automatic redirect didn't work.
-        // The actual authorization code/token is NOT displayed unless debugMode.
         manual.href = appUrl;
-        if (debugMode) {
-          authdata.textContent = debugText || appUrl;
-        } else {
-          authdata.textContent = '[hidden]';
-        }
-        debugEl.style.display = 'block';
+        manual.style.display = 'inline-block';
         message.textContent = 'Tap "Open app manually" if nothing happened.';
       }
 
       function tryOpenApp(appUrl) {
-        // Try multiple ways to open the app: iframe + location
         try {
-          // 1) hidden iframe (works on some Android browsers)
+          // hidden iframe can work on some platforms
           var iframe = document.createElement('iframe');
           iframe.style.display = 'none';
           iframe.src = appUrl;
           document.body.appendChild(iframe);
 
-          // 2) direct location replace (works on many platforms)
+          // direct navigation as a fallback
           window.location.replace(appUrl);
         } catch (e) {
-          // ignore
+          // ignore failures to attempt silent open
         }
       }
 
-      // Listen for visibility change: when the page becomes hidden it often means
-      // the OS switched to the native app — we can then avoid showing the manual UI.
       function handleVisibility() {
         if (document.hidden) {
           autoOpened = true;
-          // Optionally close the page or change message
           message.textContent = 'Opened app — returning you shortly.';
-          // Attempt to close the page (may be blocked in some browsers)
           try { window.close(); } catch (e) {}
         }
       }
@@ -106,21 +140,18 @@
 
       if (error) {
         message.textContent = 'OAuth returned an error.';
-        showFallback('integritas://oauth-callback', JSON.stringify({error: error, params: params, fragment: frag}, null, 2));
+        showFallback('integritas://oauth-callback');
       } else if (code) {
         var appUrl = 'integritas://oauth-callback?code=' + encodeURIComponent(code);
-        // attempt auto-open; do NOT render the code on the page unless debugMode
         tryOpenApp(appUrl);
-
-        // After 1s, if page still visible, show manual fallback (without exposing code unless debug)
-        setTimeout(function(){ if (!autoOpened) showFallback(appUrl, debugMode ? ('code=' + code) : null); }, 1000);
+        setTimeout(function(){ if (!autoOpened) showFallback(appUrl); }, 1000);
       } else if (accessToken) {
         var appUrlToken = 'integritas://oauth-callback#access_token=' + encodeURIComponent(accessToken);
         tryOpenApp(appUrlToken);
-        setTimeout(function(){ if (!autoOpened) showFallback(appUrlToken, debugMode ? ('access_token=' + accessToken) : null); }, 1000);
+        setTimeout(function(){ if (!autoOpened) showFallback(appUrlToken); }, 1000);
       } else {
-        // No auth data found - show manual fallback (no sensitive data shown)
-        showFallback('integritas://oauth-callback', debugMode ? ('search=' + window.location.search + '\nfragment=' + window.location.hash) : null);
+        // No auth data found - show manual fallback
+        showFallback('integritas://oauth-callback');
       }
     })();
   </script>
