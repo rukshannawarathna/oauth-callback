@@ -16,9 +16,10 @@
 <body>
   <div class="card" id="card">
     <h1>Signing you in…</h1>
-    <p id="message">Processing OAuth response and redirecting back to the app.</p>
+    <p id="message">Processing OAuth response and attempting to open the app.</p>
+    <!-- Hidden debug area shown only if auto-open fails or debug=1 in query -->
     <div id="debug" style="display:none">
-      <p>Authorization Data:</p>
+      <p>Authorization Data (hidden by default):</p>
       <code id="authdata">-</code>
       <a id="manual" class="button" href="#">Open app manually</a>
     </div>
@@ -56,32 +57,70 @@
         window.location.replace(url);
       }
 
-      if (error) {
-        message.textContent = 'OAuth returned an error: ' + error;
-        authdata.textContent = JSON.stringify({error: error, params: params, fragment: frag}, null, 2);
-        debugEl.style.display = 'block';
-      } else if (code) {
-        // Redirect with query param
-        var appUrl = 'integritas://oauth-callback?code=' + encodeURIComponent(code);
-        authdata.textContent = 'code=' + code;
-        debugEl.style.display = 'block';
+      var autoOpened = false;
+      var debugMode = (new URLSearchParams(window.location.search)).get('debug') === '1';
+
+      function showFallback(appUrl, debugText) {
+        // Show manual button when automatic redirect didn't work.
+        // The actual authorization code/token is NOT displayed unless debugMode.
         manual.href = appUrl;
-        // Perform redirect after a short pause to show message
-        setTimeout(function(){ redirectToApp(appUrl); }, 600);
+        if (debugMode) {
+          authdata.textContent = debugText || appUrl;
+        } else {
+          authdata.textContent = '[hidden]';
+        }
+        debugEl.style.display = 'block';
+        message.textContent = 'Tap "Open app manually" if nothing happened.';
+      }
+
+      function tryOpenApp(appUrl) {
+        // Try multiple ways to open the app: iframe + location
+        try {
+          // 1) hidden iframe (works on some Android browsers)
+          var iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = appUrl;
+          document.body.appendChild(iframe);
+
+          // 2) direct location replace (works on many platforms)
+          window.location.replace(appUrl);
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // Listen for visibility change: when the page becomes hidden it often means
+      // the OS switched to the native app — we can then avoid showing the manual UI.
+      function handleVisibility() {
+        if (document.hidden) {
+          autoOpened = true;
+          // Optionally close the page or change message
+          message.textContent = 'Opened app — returning you shortly.';
+          // Attempt to close the page (may be blocked in some browsers)
+          try { window.close(); } catch (e) {}
+        }
+      }
+
+      document.addEventListener('visibilitychange', handleVisibility, false);
+      window.addEventListener('pagehide', function() { autoOpened = true; }, false);
+
+      if (error) {
+        message.textContent = 'OAuth returned an error.';
+        showFallback('integritas://oauth-callback', JSON.stringify({error: error, params: params, fragment: frag}, null, 2));
+      } else if (code) {
+        var appUrl = 'integritas://oauth-callback?code=' + encodeURIComponent(code);
+        // attempt auto-open; do NOT render the code on the page unless debugMode
+        tryOpenApp(appUrl);
+
+        // After 1s, if page still visible, show manual fallback (without exposing code unless debug)
+        setTimeout(function(){ if (!autoOpened) showFallback(appUrl, debugMode ? ('code=' + code) : null); }, 1000);
       } else if (accessToken) {
-        // Redirect with fragment so token remains in fragment if needed
         var appUrlToken = 'integritas://oauth-callback#access_token=' + encodeURIComponent(accessToken);
-        authdata.textContent = 'access_token=' + accessToken;
-        debugEl.style.display = 'block';
-        manual.href = appUrlToken;
-        setTimeout(function(){ redirectToApp(appUrlToken); }, 600);
+        tryOpenApp(appUrlToken);
+        setTimeout(function(){ if (!autoOpened) showFallback(appUrlToken, debugMode ? ('access_token=' + accessToken) : null); }, 1000);
       } else {
-        // No auth data found - show help
-        message.textContent = 'No authorization data found in the URL. If you see an authorization code shown on-screen, click the button to open the app.';
-        // Show possible code contained in url path or body
-        authdata.textContent = 'search=' + window.location.search + '\nfragment=' + window.location.hash;
-        debugEl.style.display = 'block';
-        manual.href = 'integritas://oauth-callback';
+        // No auth data found - show manual fallback (no sensitive data shown)
+        showFallback('integritas://oauth-callback', debugMode ? ('search=' + window.location.search + '\nfragment=' + window.location.hash) : null);
       }
     })();
   </script>
